@@ -1,0 +1,105 @@
+name: "Feature Request"
+description: "Suggest a new feature or enhancement for go-libconfig"
+title: "[FEATURE] "
+labels: ["enhancement", "triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new feature! Please fill out the information below.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: "Feature Summary"
+      description: "A clear and concise description of the feature you'd like to see"
+      placeholder: "I would like to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: "Motivation"
+      description: "Why is this feature needed? What problem does it solve?"
+      placeholder: "This feature would help with..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Proposed Solution"
+      description: "How do you envision this feature working?"
+      placeholder: "The feature could work by..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: "API Design"
+      description: "What would the API look like? (if applicable)"
+      render: go
+      placeholder: |
+        // Example API design
+        func (c *Config) NewMethod() error {
+            // implementation
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: examples
+    attributes:
+      label: "Usage Examples"
+      description: "How would this feature be used?"
+      render: go
+      placeholder: |
+        // Example usage
+        config, _ := libconfig.ParseString("...")
+        result := config.NewMethod()
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives Considered"
+      description: "What other approaches have you considered?"
+      placeholder: "I also considered..."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priority"
+      description: "How important is this feature to you?"
+      options:
+        - "Low - Nice to have"
+        - "Medium - Would be helpful"
+        - "High - Important for my use case"
+        - "Critical - Blocking my project"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: compatibility
+    attributes:
+      label: "Compatibility"
+      description: "Compatibility considerations"
+      options:
+        - label: "This feature should be backwards compatible"
+        - label: "This feature may require breaking changes (major version bump)"
+        - label: "I'm willing to implement this feature myself"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "Additional Context"
+      description: "Any other context about the feature request"
+      placeholder: "Additional details..."
+    validations:
+      required: false

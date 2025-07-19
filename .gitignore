@@ -1,0 +1,26 @@
+# Binaries for programs and plugins
+*.so
+*.dylib
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+
+# Coverage reports
+coverage.html
+coverage.out
+
+# Temporary files
+*.tmp
+*.temp
