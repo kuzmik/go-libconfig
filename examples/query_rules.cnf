@@ -1,0 +1,28 @@
+mysql_query_rules:
+(
+  {
+    rule_id               = 50;
+    schemaname            = "web_production";
+    active                = 1;
+    apply                 = 0;
+    match_pattern         = "\/\*\s*dde='([^*]|\*[^\/]|)*\*\/\s*$";
+    re_modifiers          = "GLOBAL,CASELESS";
+  },
+  {
+    rule_id               = 51;
+    schemaname            = "web_production";
+    flagOUT               = 50;
+    active                = 1;
+    apply                 = 0;
+    match_pattern         = "\/\*\s*controller='([^*]|\*[^\/]|)*\*\/\s*$";
+    re_modifiers          = "GLOBAL,CASELESS";
+  },
+  {
+    rule_id               = 55;
+    schemaname            = "web_production";
+    flagOUT               = 50;
+    active                = 1;
+    apply                 = 0;
+    match_pattern         = ".*";
+  },
+)

@@ -1937,3 +1937,22 @@ func TestRealWorldConfig(t *testing.T) {
 		t.Errorf("Expected CPU threshold 80.0, got %f", cpuThreshold)
 	}
 }
+
+func TestEscapeSequenceInRegex(t *testing.T) {
+	input := `test_pattern = "\/\*\s*dde='([^*]|\*[^\/]|)*\*\/\s*$";`
+
+	config, err := ParseString(input)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	pattern, err := config.LookupString("test_pattern")
+	if err != nil {
+		t.Fatalf("Failed to lookup test_pattern: %v", err)
+	}
+
+	expected := "/\\*\\s*dde='([^*]|\\*[^/]|)*\\*/\\s*$"
+	if pattern != expected {
+		t.Errorf("Expected %q, got %q", expected, pattern)
+	}
+}
