@@ -44,22 +44,6 @@ jobs:
           version: v2.2.0
           args: --timeout=5m
 
-      - name: Build for multiple platforms
-        run: |
-          # Create build directory
-          mkdir -p build
-
-          # Build for different platforms
-          GOOS=linux GOARCH=amd64 go build -o build/libconfig-linux-amd64 -ldflags="-s -w" ./examples/
-          GOOS=linux GOARCH=arm64 go build -o build/libconfig-linux-arm64 -ldflags="-s -w" ./examples/
-          GOOS=darwin GOARCH=amd64 go build -o build/libconfig-darwin-amd64 -ldflags="-s -w" ./examples/
-          GOOS=darwin GOARCH=arm64 go build -o build/libconfig-darwin-arm64 -ldflags="-s -w" ./examples/
-          GOOS=windows GOARCH=amd64 go build -o build/libconfig-windows-amd64.exe -ldflags="-s -w" ./examples/
-
-          # Create checksums
-          cd build
-          sha256sum * > checksums.txt
-
       - name: Generate changelog
         id: changelog
         run: |
@@ -80,16 +64,3 @@ jobs:
 
           # Set output for use in release
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: Release ${{ steps.changelog.outputs.tag_name }}
-          body_path: CHANGELOG.md
-          files: |
-            build/*
-          draft: false
-          prerelease: ${{ contains(steps.changelog.outputs.tag_name, '-') }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

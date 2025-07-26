@@ -2,9 +2,385 @@ package libconfig
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// errorReader is a custom reader that always returns an error
+type errorReader struct{}
+
+func (r *errorReader) Read(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("simulated read error")
+}
+
+// TestNewLexerWithIOError tests the error handling path in NewLexer
+// when io.Copy fails, ensuring it creates an empty lexer gracefully.
+func TestNewLexerWithIOError(t *testing.T) {
+	// Create a reader that will cause io.Copy to fail
+	errorReader := &errorReader{}
+
+	// Call NewLexer with the error reader
+	lexer := NewLexer(errorReader)
+
+	// Verify the lexer is in the expected empty state
+	if lexer.input != "" {
+		t.Errorf("Expected empty input, got %q", lexer.input)
+	}
+
+	if lexer.pos != 0 {
+		t.Errorf("Expected pos=0, got %d", lexer.pos)
+	}
+
+	if lexer.line != 1 {
+		t.Errorf("Expected line=1, got %d", lexer.line)
+	}
+
+	if lexer.column != 1 {
+		t.Errorf("Expected column=1, got %d", lexer.column)
+	}
+
+	// Verify it has exactly one EOF token
+	if len(lexer.tokens) != 1 {
+		t.Errorf("Expected 1 token, got %d", len(lexer.tokens))
+	}
+
+	if len(lexer.tokens) > 0 {
+		token := lexer.tokens[0]
+		if token.Type != TokenEOF {
+			t.Errorf("Expected EOF token, got %s", token.Type)
+		}
+		if token.Value != "" {
+			t.Errorf("Expected empty token value, got %q", token.Value)
+		}
+		if token.Line != 1 {
+			t.Errorf("Expected token line=1, got %d", token.Line)
+		}
+		if token.Column != 1 {
+			t.Errorf("Expected token column=1, got %d", token.Column)
+		}
+	}
+
+	// Test that NextToken() works correctly with the error lexer
+	token := lexer.NextToken()
+	if token.Type != TokenEOF {
+		t.Errorf("Expected NextToken to return EOF, got %s", token.Type)
+	}
+
+	// Test that PeekToken() works correctly
+	peekedToken := lexer.PeekToken()
+	if peekedToken.Type != TokenEOF {
+		t.Errorf("Expected PeekToken to return EOF, got %s", peekedToken.Type)
+	}
+}
+
+// TestTokenString tests the Token.String() method
+func TestTokenString(t *testing.T) {
+	tests := []struct {
+		token    Token
+		expected string
+	}{
+		{
+			Token{Value: "test", Type: TokenString, Line: 1, Column: 5},
+			"{STRING: \"test\" at 1:5}",
+		},
+		{
+			Token{Value: "42", Type: TokenInteger, Line: 2, Column: 10},
+			"{INTEGER: \"42\" at 2:10}",
+		},
+		{
+			Token{Value: "=", Type: TokenAssign, Line: 3, Column: 1},
+			"{ASSIGN: \"=\" at 3:1}",
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("token_%d", i), func(t *testing.T) {
+			result := tt.token.String()
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestTokenTypeString tests all TokenType.String() cases
+func TestTokenTypeString(t *testing.T) {
+	tests := []struct {
+		tokenType TokenType
+		expected  string
+	}{
+		{TokenEOF, "EOF"},
+		{TokenIdentifier, "IDENTIFIER"},
+		{TokenString, "STRING"},
+		{TokenInteger, "INTEGER"},
+		{TokenFloat, "FLOAT"},
+		{TokenBoolean, "BOOLEAN"},
+		{TokenAssign, "ASSIGN"},
+		{TokenSemicolon, "SEMICOLON"},
+		{TokenComma, "COMMA"},
+		{TokenLeftBrace, "LEFT_BRACE"},
+		{TokenRightBrace, "RIGHT_BRACE"},
+		{TokenLeftBracket, "LEFT_BRACKET"},
+		{TokenRightBracket, "RIGHT_BRACKET"},
+		{TokenLeftParen, "LEFT_PAREN"},
+		{TokenRightParen, "RIGHT_PAREN"},
+		{TokenInclude, "INCLUDE"},
+		{TokenError, "ERROR"},
+		{TokenType(999), "UNKNOWN"}, // Test unknown type
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			result := tt.tokenType.String()
+			if result != tt.expected {
+				t.Errorf("Expected %q, got %q", tt.expected, result)
+			}
+		})
+	}
+}
+
+// TestLookupIntErrors tests error cases in LookupInt function
+func TestLookupIntErrors(t *testing.T) {
+	config, err := ParseString(`
+		max_int64 = 9223372036854775807L;
+		min_int64 = -9223372036854775808L;
+		float_val = 3.14;
+		string_val = "hello";
+	`)
+	if err != nil {
+		t.Fatalf("Failed to parse config: %v", err)
+	}
+
+	// Test int64 out of range (for 32-bit systems, this may not trigger)
+	_, err = config.LookupInt("max_int64")
+	// On 64-bit systems, this should work fine, but we're testing the error path exists
+
+	// Test wrong type errors
+	_, err = config.LookupInt("float_val")
+	if err == nil {
+		t.Error("Expected error when looking up float as int")
+	}
+
+	_, err = config.LookupInt("string_val")
+	if err == nil {
+		t.Error("Expected error when looking up string as int")
+	}
+
+	// Test non-existent path
+	_, err = config.LookupInt("nonexistent")
+	if err == nil {
+		t.Error("Expected error for non-existent path")
+	}
+}
+
+// TestParseFile tests the ParseFile function
+func TestParseFile(t *testing.T) {
+	// Create a temporary config file
+	tmpFile, err := os.CreateTemp("", "test_config_*.cfg")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write test configuration
+	configContent := `
+		app_name = "TestApp";
+		version = "1.0.0";
+		port = 8080;
+		debug = true;
+	`
+	if _, err := tmpFile.WriteString(configContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	// Test ParseFile
+	config, err := ParseFile(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("Failed to parse file: %v", err)
+	}
+
+	// Verify parsed content
+	appName, err := config.LookupString("app_name")
+	if err != nil || appName != "TestApp" {
+		t.Errorf("Expected app_name='TestApp', got '%s'", appName)
+	}
+
+	port, err := config.LookupInt("port")
+	if err != nil || port != 8080 {
+		t.Errorf("Expected port=8080, got %d", port)
+	}
+
+	// Test file not found error
+	_, err = ParseFile("nonexistent_file.cfg")
+	if err == nil {
+		t.Error("Expected error for non-existent file")
+	}
+}
+
+// TestNewParserWithBaseDir tests the NewParserWithBaseDir function
+func TestNewParserWithBaseDir(t *testing.T) {
+	lexer := NewLexer(strings.NewReader("test = 42;"))
+	baseDir := "/test/base/dir"
+
+	parser := NewParserWithBaseDir(lexer, baseDir)
+
+	if parser.baseDir != baseDir {
+		t.Errorf("Expected baseDir='%s', got '%s'", baseDir, parser.baseDir)
+	}
+
+	if parser.includeDepth != 0 {
+		t.Errorf("Expected includeDepth=0, got %d", parser.includeDepth)
+	}
+
+	if parser.lexer != lexer {
+		t.Error("Expected lexer to be set correctly")
+	}
+}
+
+// TestNextTokenEOF tests NextToken behavior at EOF
+func TestNextTokenEOF(t *testing.T) {
+	lexer := NewLexer(strings.NewReader(""))
+
+	// First call should return EOF
+	token1 := lexer.NextToken()
+	if token1.Type != TokenEOF {
+		t.Errorf("Expected EOF, got %s", token1.Type)
+	}
+
+	// Subsequent calls should also return EOF
+	token2 := lexer.NextToken()
+	if token2.Type != TokenEOF {
+		t.Errorf("Expected EOF on second call, got %s", token2.Type)
+	}
+}
+
+// TestPeekTokenEOF tests PeekToken behavior at EOF
+func TestPeekTokenEOF(t *testing.T) {
+	lexer := NewLexer(strings.NewReader(""))
+
+	// Peek should return EOF
+	peeked := lexer.PeekToken()
+	if peeked.Type != TokenEOF {
+		t.Errorf("Expected EOF from peek, got %s", peeked.Type)
+	}
+
+	// NextToken should still return EOF
+	next := lexer.NextToken()
+	if next.Type != TokenEOF {
+		t.Errorf("Expected EOF from next, got %s", next.Type)
+	}
+}
+
+// TestIncludeFileHandling tests include file functionality with temporary files
+func TestIncludeFileHandling(t *testing.T) {
+	// Create temporary directory
+	tmpDir, err := os.MkdirTemp("", "libconfig_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create included file
+	includedFile := filepath.Join(tmpDir, "included.cfg")
+	includedContent := `
+		included_setting = "from_include";
+		included_port = 9090;
+	`
+	if err := os.WriteFile(includedFile, []byte(includedContent), 0o644); err != nil {
+		t.Fatalf("Failed to write included file: %v", err)
+	}
+
+	// Create main file with include
+	mainFile := filepath.Join(tmpDir, "main.cfg")
+	mainContent := fmt.Sprintf(`
+		main_setting = "from_main";
+		@include "%s"
+		main_port = 8080;
+	`, "included.cfg") // Use relative path
+	if err := os.WriteFile(mainFile, []byte(mainContent), 0o644); err != nil {
+		t.Fatalf("Failed to write main file: %v", err)
+	}
+
+	// Test parsing with includes
+	config, err := ParseFile(mainFile)
+	if err != nil {
+		t.Fatalf("Failed to parse file with includes: %v", err)
+	}
+
+	// Verify main settings
+	mainSetting, err := config.LookupString("main_setting")
+	if err != nil || mainSetting != "from_main" {
+		t.Errorf("Expected main_setting='from_main', got '%s'", mainSetting)
+	}
+
+	// Verify included settings
+	includedSetting, err := config.LookupString("included_setting")
+	if err != nil || includedSetting != "from_include" {
+		t.Errorf("Expected included_setting='from_include', got '%s'", includedSetting)
+	}
+
+	includedPort, err := config.LookupInt("included_port")
+	if err != nil || includedPort != 9090 {
+		t.Errorf("Expected included_port=9090, got %d", includedPort)
+	}
+}
+
+// TestIncludeDepthLimit tests include depth limiting
+func TestIncludeDepthLimit(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "libconfig_depth_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create a chain of include files that exceeds depth limit
+	for i := 0; i <= 11; i++ {
+		filename := filepath.Join(tmpDir, fmt.Sprintf("level%d.cfg", i))
+		var content string
+		if i < 11 {
+			content = fmt.Sprintf(`
+				level%d_setting = %d;
+				@include "level%d.cfg"
+			`, i, i, i+1)
+		} else {
+			content = fmt.Sprintf(`level%d_setting = %d;`, i, i)
+		}
+
+		if err := os.WriteFile(filename, []byte(content), 0o644); err != nil {
+			t.Fatalf("Failed to write level%d file: %v", i, err)
+		}
+	}
+
+	// Try to parse - should fail due to depth limit
+	mainFile := filepath.Join(tmpDir, "level0.cfg")
+	_, err = ParseFile(mainFile)
+	if err == nil {
+		t.Error("Expected error due to include depth limit, but parsing succeeded")
+	}
+
+	// Verify error mentions depth limit
+	if !strings.Contains(err.Error(), "depth limit") {
+		t.Errorf("Expected depth limit error, got: %v", err)
+	}
+}
+
+// TestLexerPeekEdgeCases tests edge cases in lexer peek function
+func TestLexerPeekEdgeCases(t *testing.T) {
+	// Test peek at end of input
+	lexer := NewLexer(strings.NewReader("a"))
+
+	// Advance to 'a'
+	lexer.advance()
+
+	// Peek should return 0 (EOF)
+	peeked := lexer.peek()
+	if peeked != 0 {
+		t.Errorf("Expected peek to return 0 at EOF, got %q", peeked)
+	}
+}
 
 func TestParseString(t *testing.T) {
 	config, err := ParseString(`name = "test"; port = 8080;`)
