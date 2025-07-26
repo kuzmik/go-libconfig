@@ -1,3 +1,5 @@
+//go:build ignore
+
 // Package main demonstrates basic usage of the libconfig library.
 package main
 

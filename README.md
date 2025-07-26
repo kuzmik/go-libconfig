@@ -301,8 +301,8 @@ make check
 
 ### Project Structure
 
-- Comprehensive test suite with >95% coverage
+- Comprehensive test suite with >94% coverage
 - Benchmark tests for performance monitoring
-- Golangci-lint configuration for code quality
-- Makefile for common development tasks
-- Examples demonstrating all features
+- `golangci-lint` configuration for code quality
+- `Makefile` for common development tasks
+- `./examples` demonstrating all features
