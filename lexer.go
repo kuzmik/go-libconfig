@@ -234,6 +234,8 @@ func (l *Lexer) readString() string {
 				result.WriteRune('\\')
 			case '"':
 				result.WriteRune('"')
+			case '/':
+				result.WriteRune('/')
 			case 'x':
 				// Hexadecimal escape \xNN
 				l.advance()
@@ -259,6 +261,9 @@ func (l *Lexer) readString() string {
 
 				continue
 			default:
+				// For unknown escape sequences, preserve the backslash
+				// This is important for regex patterns and other use cases
+				result.WriteRune('\\')
 				result.WriteRune(l.current)
 			}
 		} else {
