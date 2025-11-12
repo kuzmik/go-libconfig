@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -1936,6 +1937,28 @@ func TestRealWorldConfig(t *testing.T) {
 	if err != nil || cpuThreshold != 80.0 {
 		t.Errorf("Expected CPU threshold 80.0, got %f", cpuThreshold)
 	}
+}
+
+func TestRegexPatternIsValid(t *testing.T) {
+	input := `test_pattern = "\/\*\s*dde='([^*]|\*[^\/]|)*\*\/\s*$";`
+
+	config, err := ParseString(input)
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	pattern, err := config.LookupString("test_pattern")
+	if err != nil {
+		t.Fatalf("Failed to lookup test_pattern: %v", err)
+	}
+
+	// Validate that the pattern is a valid regex
+	_, err = regexp.Compile(pattern)
+	if err != nil {
+		t.Fatalf("Produced pattern %q is not a valid regex: %v", pattern, err)
+	}
+
+	t.Logf("✓ Pattern %q is valid regex", pattern)
 }
 
 func TestEscapeSequenceInRegex(t *testing.T) {
